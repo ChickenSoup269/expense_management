@@ -1,11 +1,12 @@
 import React, { useMemo, useState, useEffect, useRef } from "react"
-import { Transaction, DateFilter, Category } from "../types"
+import { Transaction, DateFilter, Category, Budget } from "../types" // Thêm Budget vào import
 import {
   CATEGORY_LABELS,
   CATEGORY_COLORS,
   formatCurrency,
   formatNumberWithCommas,
 } from "../constants"
+
 import {
   PieChart,
   Pie,
@@ -34,10 +35,13 @@ import {
   CalendarDays,
   Upload,
   FileJson,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react"
 
 interface AnalyticsProps {
   transactions: Transaction[]
+  budget: Budget // <--- Thêm prop budget
   onImportData?: (data: Transaction[]) => void
 }
 
@@ -57,6 +61,7 @@ const EXPENSE_CATEGORIES = Object.keys(CATEGORY_LABELS).filter(
 
 export const Analytics: React.FC<AnalyticsProps> = ({
   transactions,
+  budget, // <--- Nhận prop budget
   onImportData,
 }) => {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month")
@@ -437,6 +442,75 @@ export const Analytics: React.FC<AnalyticsProps> = ({
     )
   }
 
+  const budgetStatusData = useMemo(() => {
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+
+    // Lọc giao dịch CHI TIÊU trong tháng này
+    const thisMonthTransactions = transactions.filter((t) => {
+      const d = new Date(t.date)
+      return (
+        t.type === "expense" &&
+        d.getMonth() === currentMonth &&
+        d.getFullYear() === currentYear
+      )
+    })
+
+    // Gom nhóm theo category
+    const spentByCategory: Record<string, number> =
+      thisMonthTransactions.reduce((acc, t) => {
+        acc[t.category] = (acc[t.category] || 0) + t.amount
+        return acc
+      }, {} as Record<string, number>)
+
+    // Map dữ liệu để render
+    // Chỉ lấy các danh mục CÓ thiết lập hạn mức trong budget
+    const categoriesWithLimit = Object.keys(
+      budget.categoryLimits || {}
+    ) as Category[]
+
+    return categoriesWithLimit
+      .map((cat) => {
+        const limit = budget.categoryLimits[cat] || 0
+        const spent = spentByCategory[cat] || 0
+        const remaining = limit - spent
+        const percentage = limit > 0 ? (spent / limit) * 100 : 0
+
+        let statusColor = "bg-blue-500"
+        let textColor = "text-blue-600 dark:text-blue-400"
+        let bgColor = "bg-blue-50 dark:bg-blue-900/20"
+
+        if (percentage >= 100) {
+          statusColor = "bg-red-500"
+          textColor = "text-red-600 dark:text-red-400"
+          bgColor = "bg-red-50 dark:bg-red-900/20"
+        } else if (percentage >= 80) {
+          statusColor = "bg-yellow-500"
+          textColor = "text-yellow-600 dark:text-yellow-400"
+          bgColor = "bg-yellow-50 dark:bg-yellow-900/20"
+        } else if (percentage < 50) {
+          statusColor = "bg-green-500"
+          textColor = "text-green-600 dark:text-green-400"
+          bgColor = "bg-green-50 dark:bg-green-900/20"
+        }
+
+        return {
+          category: cat,
+          label: CATEGORY_LABELS[cat],
+          limit,
+          spent,
+          remaining,
+          percentage,
+          statusColor,
+          textColor,
+          bgColor,
+          isOver: percentage >= 100,
+        }
+      })
+      .sort((a, b) => b.percentage - a.percentage) // Sắp xếp cái nào gần hết hạn mức lên đầu
+  }, [transactions, budget])
+
   return (
     <div className="space-y-8">
       {/* Hidden File Input */}
@@ -522,6 +596,113 @@ export const Analytics: React.FC<AnalyticsProps> = ({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* --- UI MỚI: PHẦN HẠN MỨC CHI TIÊU --- */}
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <CheckSquare
+              size={20}
+              className="text-blue-600 dark:text-blue-400"
+            />
+            Theo Dõi Ngân Sách (Tháng này)
+          </h3>
+          <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+            Tổng hạn mức:{" "}
+            {/* {formatCurrency(
+              Object.values(budget.categoryLimits || {}).reduce(
+                (acc: number, limit: unknown) => acc + (Number(limit) || 0),
+                0
+              )
+            )} */}
+          </span>
+        </div>
+
+        {budgetStatusData.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {budgetStatusData.map((item) => (
+              <div
+                key={item.category}
+                className={`p-4 rounded-xl border transition-all hover:shadow-md ${
+                  item.isOver
+                    ? "border-red-200 dark:border-red-900/50 bg-red-50/10"
+                    : "border-slate-100 dark:border-slate-800"
+                }`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs"
+                      style={{
+                        backgroundColor: CATEGORY_COLORS[item.category],
+                      }}
+                    >
+                      {/* Bạn có thể map Icon tương ứng ở đây nếu muốn */}
+                      {item.label.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-700 dark:text-slate-200 text-sm">
+                        {item.label}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Hạn mức: {formatCompactNumber(item.limit)}
+                      </p>
+                    </div>
+                  </div>
+                  {item.isOver ? (
+                    <AlertCircle size={18} className="text-red-500" />
+                  ) : (
+                    <div
+                      className={`text-xs font-bold px-2 py-1 rounded-full ${item.bgColor} ${item.textColor}`}
+                    >
+                      {item.percentage.toFixed(0)}%
+                    </div>
+                  )}
+                </div>
+
+                <div className="mb-2">
+                  <div className="flex justify-between text-xs font-medium mb-1">
+                    <span className="text-slate-600 dark:text-slate-300">
+                      Đã dùng: {formatCompactNumber(item.spent)}
+                    </span>
+                    <span
+                      className={
+                        item.isOver ? "text-red-500" : "text-green-500"
+                      }
+                    >
+                      {item.isOver
+                        ? `Vượt: ${formatCompactNumber(
+                            Math.abs(item.remaining)
+                          )}`
+                        : `Còn: ${formatCompactNumber(item.remaining)}`}
+                    </span>
+                  </div>
+                  {/* Thanh Progress Bar */}
+                  <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${item.statusColor}`}
+                      style={{ width: `${Math.min(item.percentage, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {item.isOver && (
+                  <p className="text-[10px] text-red-500 mt-2 flex items-center gap-1">
+                    Bạn đã chi tiêu vượt quá hạn mức cho phép.
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-dashed border-slate-200 dark:border-slate-700">
+            <p>Chưa thiết lập hạn mức chi tiêu nào.</p>
+            <p className="text-sm mt-1">
+              Vui lòng cài đặt ngân sách trong phần Cài đặt.
+            </p>
+          </div>
+        )}
       </div>
 
       <hr className="border-slate-100 dark:border-slate-800" />

@@ -1,15 +1,15 @@
 import { Category, Transaction, Budget } from "./types"
-import {
-  Utensils,
-  Bus,
-  Lightbulb,
-  ShoppingBag,
-  Film,
-  HeartPulse,
-  GraduationCap,
-  Wallet,
-  MoreHorizontal,
-} from "lucide-react"
+// import {
+//   Utensils,
+//   Bus,
+//   Lightbulb,
+//   ShoppingBag,
+//   Film,
+//   HeartPulse,
+//   GraduationCap,
+//   Wallet,
+//   MoreHorizontal,
+// } from "lucide-react"
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   food: "Ăn uống",
@@ -83,10 +83,22 @@ const generateMockData = (): Transaction[] => {
 export const MOCK_TRANSACTIONS: Transaction[] = generateMockData()
 
 export const DEFAULT_BUDGET: Budget = {
-  monthlyLimit: 15000000,
-  savingsGoal: 5000000,
-}
+  monthlyLimit: 15000000, // Tổng hạn mức tháng
+  savingsGoal: 5000000, // Mục tiêu tiết kiệm
 
+  // Hạn mức chi tiêu cho từng danh mục (User có thể sửa đổi sau này ở UI)
+  categoryLimits: {
+    food: 4000000, // Hạn mức ăn uống
+    transport: 2000000, // Hạn mức di chuyển
+    utilities: 1500000, // Hạn mức hóa đơn
+    shopping: 3000000, // Hạn mức mua sắm
+    entertainment: 1500000, // Hạn mức giải trí
+    health: 1000000, // Hạn mức sức khỏe
+    education: 2000000, // Hạn mức giáo dục
+    other: 1000000, // Hạn mức khác
+    // 'income' thường không đặt hạn mức chi, nên có thể để trống hoặc 0
+  },
+}
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",

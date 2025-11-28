@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useMemo } from "react"
-import { Transaction, ViewMode, DateFilter, Budget } from "./types"
+import React, { useState, useEffect } from "react"
+import { Transaction, ViewMode, Budget } from "./types"
 import { MOCK_TRANSACTIONS, DEFAULT_BUDGET } from "./constants"
 import { Dashboard } from "./components/Dashboard"
 import { TransactionList } from "./components/TransactionList"
 import { Analytics } from "./components/Analytics"
 import { Sidebar } from "./components/Sidebar"
-import { LayoutDashboard, List, PieChart, PlusCircle, X } from "lucide-react"
+import { PlusCircle, X, Settings } from "lucide-react"
 import { TransactionForm } from "./components/TransactionForm"
+import { BudgetSettingsModal } from "./components/BudgetSettingsModal"
 
 const App: React.FC = () => {
-  // State
+  // --- STATE ---
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    // Ưu tiên lấy từ LocalStorage
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("transactions")
       return saved ? JSON.parse(saved) : MOCK_TRANSACTIONS
@@ -22,7 +22,25 @@ const App: React.FC = () => {
   const [budget, setBudget] = useState<Budget>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("budget")
-      return saved ? JSON.parse(saved) : DEFAULT_BUDGET
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          // KỸ THUẬT MERGE:
+          // Lấy DEFAULT_BUDGET làm gốc, ghi đè bằng dữ liệu đã lưu (parsed).
+          // Riêng categoryLimits cũng phải merge để đảm bảo không bị thiếu.
+          return {
+            ...DEFAULT_BUDGET,
+            ...parsed,
+            categoryLimits: {
+              ...DEFAULT_BUDGET.categoryLimits,
+              ...(parsed.categoryLimits || {}),
+            },
+          }
+        } catch (error) {
+          console.error("Lỗi đọc budget cũ, reset về mặc định", error)
+          return DEFAULT_BUDGET
+        }
+      }
     }
     return DEFAULT_BUDGET
   })
@@ -38,7 +56,6 @@ const App: React.FC = () => {
     return "light"
   })
 
-  // View Persistence
   const [currentView, setCurrentView] = useState<ViewMode>(() => {
     if (typeof window !== "undefined") {
       const savedView = localStorage.getItem("currentView")
@@ -47,21 +64,23 @@ const App: React.FC = () => {
     return "dashboard"
   })
 
-  // API Key State
   const [apiKey, setApiKey] = useState<string>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("gemini_api_key") || ""
     }
     return ""
   })
-  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false)
 
+  // Modal States
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false)
+
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(
     null
   )
 
-  // Effects
+  // --- EFFECTS ---
   useEffect(() => {
     localStorage.setItem("transactions", JSON.stringify(transactions))
   }, [transactions])
@@ -84,12 +103,12 @@ const App: React.FC = () => {
     localStorage.setItem("currentView", currentView)
   }, [currentView])
 
-  // Safe ID Generator
+  // --- HELPERS ---
   const generateId = () => {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
   }
 
-  // Handlers
+  // --- HANDLERS ---
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"))
   }
@@ -100,6 +119,7 @@ const App: React.FC = () => {
     setIsKeyModalOpen(false)
   }
 
+  // Transaction Handlers
   const handleAddTransaction = (transaction: Omit<Transaction, "id">) => {
     const newTransaction = {
       ...transaction,
@@ -125,26 +145,17 @@ const App: React.FC = () => {
     setTransactions((prev) => prev.filter((t) => !ids.includes(t.id)))
   }
 
-  // --- MOI: HÀM XỬ LÝ IMPORT DATA JSON ---
   const handleImportData = (importedData: Transaction[]) => {
-    // Có thể chọn 1 trong 2 cách:
-
-    // Cách 1: Ghi đè toàn bộ (Restore backup) - Đơn giản, sạch sẽ
     setTransactions(importedData)
-
-    /* 
-    // Cách 2: Merge (Gộp) - Phức tạp hơn, cần tránh trùng ID
-    setTransactions(prev => {
-        const existingIds = new Set(prev.map(t => t.id));
-        const newUniqueData = importedData.filter(t => !existingIds.has(t.id));
-        return [...newUniqueData, ...prev];
-    }); 
-    */
-
     alert(`Đã khôi phục thành công ${importedData.length} giao dịch!`)
   }
-  // ----------------------------------------
 
+  // Budget Handler
+  const handleSaveBudget = (newBudget: Budget) => {
+    setBudget(newBudget)
+  }
+
+  // Modal Triggers
   const openEditModal = (t: Transaction) => {
     setEditTransaction(t)
     setIsFormOpen(true)
@@ -155,7 +166,7 @@ const App: React.FC = () => {
     setIsFormOpen(true)
   }
 
-  // Render View
+  // --- RENDER VIEW ---
   const renderView = () => {
     switch (currentView) {
       case "dashboard":
@@ -172,6 +183,7 @@ const App: React.FC = () => {
         return (
           <TransactionList
             transactions={transactions}
+            budget={budget}
             onEdit={openEditModal}
             onDelete={handleDeleteTransaction}
             onDeleteMany={handleDeleteManyTransactions}
@@ -182,7 +194,7 @@ const App: React.FC = () => {
         return (
           <Analytics
             transactions={transactions}
-            // --- MOI: TRUYỀN HÀM IMPORT XUỐNG ---
+            budget={budget}
             onImportData={handleImportData}
           />
         )
@@ -193,7 +205,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden transition-colors duration-200">
-      {/* Sidebar (Desktop) */}
+      {/* Sidebar */}
       <Sidebar
         currentView={currentView}
         onChangeView={setCurrentView}
@@ -205,7 +217,7 @@ const App: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 overflow-auto relative">
         <div className="max-w-7xl mx-auto p-4 md:p-8 pb-24 md:pb-8">
-          <header className="flex justify-between items-center mb-8">
+          <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
             <div>
               <h1 className="text-2xl font-bold text-slate-800 dark:text-white transition-colors">
                 {currentView === "dashboard" && "Tổng Quan"}
@@ -216,20 +228,35 @@ const App: React.FC = () => {
                 Quản lý tài chính cá nhân hiệu quả
               </p>
             </div>
-            <button
-              onClick={openAddModal}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
-            >
-              <PlusCircle size={20} />
-              <span className="hidden sm:inline">Thêm Chi Tiêu</span>
-            </button>
+
+            <div className="flex gap-2">
+              {/* Nút Cài đặt Ngân sách */}
+              <button
+                onClick={() => setIsBudgetModalOpen(true)}
+                className="flex items-center gap-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm font-medium"
+              >
+                <Settings size={20} />
+                <span className="hidden sm:inline">Ngân sách</span>
+              </button>
+
+              {/* Nút Thêm Chi Tiêu */}
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
+              >
+                <PlusCircle size={20} />
+                <span className="hidden sm:inline">Thêm Mới</span>
+              </button>
+            </div>
           </header>
 
           {renderView()}
         </div>
       </main>
 
-      {/* Transaction Form Modal */}
+      {/* --- MODALS --- */}
+
+      {/* 1. Transaction Form Modal */}
       {isFormOpen && (
         <TransactionForm
           isOpen={isFormOpen}
@@ -241,10 +268,18 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* API Key Modal */}
+      {/* 2. Budget Settings Modal */}
+      <BudgetSettingsModal
+        isOpen={isBudgetModalOpen}
+        onClose={() => setIsBudgetModalOpen(false)}
+        currentBudget={budget}
+        onSave={handleSaveBudget}
+      />
+
+      {/* 3. API Key Modal */}
       {isKeyModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-lg font-bold text-slate-800 dark:text-white">
                 Cấu hình API Key

@@ -139,8 +139,108 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     filteredTransactions.length > 0 &&
     selectedIds.length === filteredTransactions.length
 
+  // Calculate Period Statistics (Week, Month, Year)
+  const periodStats = useMemo(() => {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth()
+    
+    // Calculate start of current week (Monday)
+    const startOfWeek = new Date(now)
+    const day = startOfWeek.getDay()
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1) // adjust when day is sunday
+    startOfWeek.setDate(diff)
+    startOfWeek.setHours(0, 0, 0, 0)
+
+    const startOfMonth = new Date(currentYear, currentMonth, 1)
+    const startOfYear = new Date(currentYear, 0, 1)
+
+    return transactions.reduce(
+      (acc, t) => {
+        if (t.type !== "expense") return acc
+
+        const [y, m, d] = t.date.split("-").map(Number)
+        const tDate = new Date(y, m - 1, d)
+
+        // Week
+        if (tDate >= startOfWeek) {
+          acc.week += t.amount
+        }
+        // Month
+        if (tDate >= startOfMonth) {
+          acc.month += t.amount
+        }
+        // Year
+        if (tDate >= startOfYear) {
+          acc.year += t.amount
+        }
+        return acc
+      },
+      { week: 0, month: 0, year: 0 }
+    )
+  }, [transactions])
+
   return (
     <div className="flex flex-col gap-6 relative">
+      {/* Period Summary Table - Requested Feature */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+          <h3 className="font-bold text-slate-800 dark:text-white">
+            Thống Kê Chi Tiêu
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-800/50">
+              <tr>
+                <th className="px-6 py-3 font-medium">Thời gian</th>
+                <th className="px-6 py-3 font-medium text-right">
+                  Đã sử dụng
+                </th>
+                <th className="px-6 py-3 font-medium text-right">
+                  Trạng thái
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
+                  Tuần này
+                </td>
+                <td className="px-6 py-4 text-right font-bold text-red-600 dark:text-red-400">
+                  {formatCurrency(periodStats.week)}
+                </td>
+                <td className="px-6 py-4 text-right text-xs text-slate-500">
+                  -
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
+                  Tháng này
+                </td>
+                <td className="px-6 py-4 text-right font-bold text-red-600 dark:text-red-400">
+                  {formatCurrency(periodStats.month)}
+                </td>
+                <td className="px-6 py-4 text-right text-xs text-slate-500">
+                  -
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
+                  Năm này
+                </td>
+                <td className="px-6 py-4 text-right font-bold text-red-600 dark:text-red-400">
+                  {formatCurrency(periodStats.year)}
+                </td>
+                <td className="px-6 py-4 text-right text-xs text-slate-500">
+                  -
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Summary Cards for Current View */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4 transition-colors">
